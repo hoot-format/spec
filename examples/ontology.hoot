@@ -16,7 +16,7 @@ class owl:Thing
   ex:Event "Event"
   ex:Era "Era"
 
-ObjectProperty{iri,label,inverse,characteristics,domain,range}:
+->{iri,label,inverse,characteristics,domain,range}:
  ex:partOf,part of,ex:hasPart,transitive,,
  ex:locatedIn,located in,,transitive,,ex:Place
  ex:hasFounder,has founder,ex:founderOf
@@ -25,11 +25,11 @@ ObjectProperty{iri,label,inverse,characteristics,domain,range}:
  ex:hasParticipant,has participant,ex:participatesIn,,ex:Event,
  ex:causes,causes,ex:causedBy,,ex:Event,ex:Event
 
-DataProperty{iri,label,domain,range}:
+=>{iri,label,domain,range}:
  ex:occurredOnDate,occurred on date,ex:Occurrent,xsd:date
  ex:startDate,start date,ex:Occurrent,xsd:date
  ex:endDate,end date,ex:Occurrent,xsd:date
  ex:wikipediaURL,Wikipedia URL,,xsd:anyURI
  ex:officialURL,official URL,,xsd:anyURI
 
-disjoint (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Occurrent ex:Person),(ex:Occurrent ex:Organization),(ex:Occurrent ex:Place),(ex:Product ex:Service),(ex:Event ex:Era)
+! (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Occurrent ex:Person),(ex:Occurrent ex:Organization),(ex:Occurrent ex:Place),(ex:Product ex:Service),(ex:Event ex:Era)

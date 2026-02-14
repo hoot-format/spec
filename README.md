@@ -37,10 +37,10 @@ class owl:Thing
  Organization
   Company
 
-ObjectProperty{iri,inverse,characteristics}:
+->{iri,inverse,characteristics}:
  partOf,hasPart,transitive
 
-disjoint (Person Organization)
+! (Person Organization)
 ```
 
 ## Encoding Modes
@@ -53,18 +53,18 @@ disjoint (Person Organization)
 ## Syntax Overview
 
 ```
-@ex //example.org                              # Prefix: // = http://, trailing / or # auto-appended
+@ex //example.org                       # Prefix: // = http://, trailing / or # auto-appended
 
-class owl:Thing                                 # Class hierarchy via indentation
+class owl:Thing                          # Class hierarchy via indentation
  Person
   Politician
 
-ObjectProperty{iri,inverse,characteristics}:    # Tabular property declarations
+->{iri,inverse,characteristics}:         # Tabular property declarations
  partOf,hasPart,transitive
 
-disjoint (Person Organization),(Person Place)   # Disjoint class sets
+! (Person Organization),(Person Place)   # Disjoint class sets
 
-ex:Toyota:                                      # Subject block: general-purpose triples
+ex:Toyota:                               # Subject block: general-purpose triples
  a ex:Company
  rdfs:label "Toyota"
  ex:startDate "1937-08-28"^^xsd:date

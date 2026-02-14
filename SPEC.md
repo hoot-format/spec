@@ -30,8 +30,8 @@ The compact encoder MAY omit:
 | `rdfs:label` | Label equals the IRI local name (e.g., `ex:Person` -> `"Person"`) |
 | Prefix on names | A declared prefix matches (e.g., `ex:Person` -> `Person`) |
 | `a owl:Class` | Class appears in a `class` section |
-| `a owl:ObjectProperty` | Property appears in an `ObjectProperty` tabular section |
-| `a owl:DatatypeProperty` | Property appears in a `DataProperty` tabular section |
+| `a owl:ObjectProperty` | Property appears in a `->` tabular section |
+| `a owl:DatatypeProperty` | Property appears in a `=>` tabular section |
 | Standard prefix declarations | `owl:`, `rdfs:`, `rdf:`, `xsd:` are implicitly available |
 | `rdfs:domain owl:Thing` | Domain is the universal class |
 
@@ -117,8 +117,8 @@ A HOOT document consists of:
 1. **Prefix declarations**
 2. **Sections** (in any order, separated by blank lines):
    - `class` -- Class hierarchy (compact OWL pattern)
-   - Tabular sections -- `ObjectProperty`, `DataProperty`, etc.
-   - `disjoint` -- Disjoint class sets (compact OWL pattern)
+   - Tabular sections -- `->` (ObjectProperty), `=>` (DataProperty), `@>` (AnnotationProperty)
+   - `!` -- Disjoint class sets (compact OWL pattern)
    - Subject blocks -- General-purpose triples
 
 ---
@@ -235,7 +235,7 @@ Compact syntax for uniform property declarations.
 - Empty field: omitted between commas (`a,,c`)
 - Trailing empty fields may be omitted
 
-### 5.1 ObjectProperty
+### 5.1 `->` (ObjectProperty)
 
 Fields and their predicate mapping:
 
@@ -262,7 +262,7 @@ Characteristic values:
 
 **Example (Lossless):**
 ```
-ObjectProperty{iri,label,inverse,characteristics,domain,range}:
+->{iri,label,inverse,characteristics,domain,range}:
  ex:partOf,part of,ex:hasPart,transitive,,
  ex:locatedIn,located in,,,ex:Place
  ex:hasFounder,has founder,ex:founderOf
@@ -272,7 +272,7 @@ ObjectProperty{iri,label,inverse,characteristics,domain,range}:
 
 **Example (Compact):**
 ```
-ObjectProperty{iri,inverse,characteristics,domain,range}:
+->{iri,inverse,characteristics,domain,range}:
  partOf,hasPart,transitive
  locatedIn,,,Place
  hasFounder,founderOf
@@ -282,7 +282,7 @@ ObjectProperty{iri,inverse,characteristics,domain,range}:
 
 In compact mode, the `label` field is omitted entirely from the header since all labels are derivable.
 
-### 5.2 DataProperty
+### 5.2 `=>` (DataProperty)
 
 | Field | Predicate |
 |-------|-----------|
@@ -293,12 +293,12 @@ In compact mode, the `label` field is omitted entirely from the header since all
 
 **Example (Lossless):**
 ```
-DataProperty{iri,label,domain,range}:
+=>{iri,label,domain,range}:
  ex:occurredOnDate,occurred on date,ex:Occurrent,xsd:date
  ex:wikipediaURL,Wikipedia URL,,xsd:anyURI
 ```
 
-### 5.3 AnnotationProperty
+### 5.3 `@>` (AnnotationProperty)
 
 | Field | Predicate |
 |-------|-----------|
@@ -314,19 +314,19 @@ Compact syntax for `owl:AllDisjointClasses`.
 ### Syntax
 
 ```
-disjoint (<class> <class> ...),(<class> <class> ...)
+! (<class> <class> ...),(<class> <class> ...)
 ```
 
 ### Rules
 
-- Keyword `disjoint` (lowercase)
+- `!` sigil denotes disjoint declaration
 - Each `(...)` group is a set of mutually disjoint classes
 - Groups separated by commas
 
 ### Example
 
 ```
-disjoint (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Event ex:Era)
+! (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Event ex:Era)
 ```
 
 ### Equivalent Turtle (per group)
@@ -406,7 +406,7 @@ Values are unquoted by default. Quote with `"..."` when the value:
 - Contains: `,` `"` `\` `(` `)` `[` `]` `{` `}`
 - Has leading or trailing whitespace
 - Is an empty string that must be preserved (distinct from omitted field)
-- Matches a keyword: `true` `false` `null` `a` `class` `disjoint`
+- Matches a keyword: `true` `false` `null` `a` `class`
 
 ### In Subject Blocks
 
@@ -457,7 +457,7 @@ class owl:Thing
   ex:Event "Event"
   ex:Era "Era"
 
-ObjectProperty{iri,label,inverse,characteristics,domain,range}:
+->{iri,label,inverse,characteristics,domain,range}:
  ex:partOf,part of,ex:hasPart,transitive,,
  ex:locatedIn,located in,,transitive,,ex:Place
  ex:hasFounder,has founder,ex:founderOf
@@ -466,14 +466,14 @@ ObjectProperty{iri,label,inverse,characteristics,domain,range}:
  ex:hasParticipant,has participant,ex:participatesIn,,ex:Event,
  ex:causes,causes,ex:causedBy,,ex:Event,ex:Event
 
-DataProperty{iri,label,domain,range}:
+=>{iri,label,domain,range}:
  ex:occurredOnDate,occurred on date,ex:Occurrent,xsd:date
  ex:startDate,start date,ex:Occurrent,xsd:date
  ex:endDate,end date,ex:Occurrent,xsd:date
  ex:wikipediaURL,Wikipedia URL,,xsd:anyURI
  ex:officialURL,official URL,,xsd:anyURI
 
-disjoint (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Occurrent ex:Person),(ex:Occurrent ex:Organization),(ex:Occurrent ex:Place),(ex:Product ex:Service),(ex:Event ex:Era)
+! (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Occurrent ex:Person),(ex:Occurrent ex:Organization),(ex:Occurrent ex:Place),(ex:Product ex:Service),(ex:Event ex:Era)
 ```
 
 ## 11. Complete Example (Compact)
@@ -497,7 +497,7 @@ class owl:Thing
   Event
   Era
 
-ObjectProperty{iri,inverse,characteristics,domain,range}:
+->{iri,inverse,characteristics,domain,range}:
  partOf,hasPart,transitive
  locatedIn,,transitive,,Place
  hasFounder,founderOf
@@ -506,14 +506,14 @@ ObjectProperty{iri,inverse,characteristics,domain,range}:
  hasParticipant,participatesIn,,Event
  causes,causedBy,,Event,Event
 
-DataProperty{iri,domain,range}:
+=>{iri,domain,range}:
  occurredOnDate,Occurrent,xsd:date
  startDate,Occurrent,xsd:date
  endDate,Occurrent,xsd:date
  wikipediaURL,,xsd:anyURI
  officialURL,,xsd:anyURI
 
-disjoint (Person Organization),(Person Place),(Occurrent Person),(Occurrent Organization),(Occurrent Place),(Product Service),(Event Era)
+! (Person Organization),(Person Place),(Occurrent Person),(Occurrent Organization),(Occurrent Place),(Product Service),(Event Era)
 ```
 
 ---
@@ -525,8 +525,8 @@ disjoint (Person Organization),(Person Place),(Occurrent Person),(Occurrent Orga
 1. Parse Turtle into RDF triples
 2. Identify compressible patterns:
    - Classes with `a owl:Class` + `rdfs:label` + `rdfs:subClassOf` -> `class` section
-   - Properties with uniform predicates -> tabular section
-   - `owl:AllDisjointClasses` -> `disjoint` section
+   - Properties with uniform predicates -> `->` / `=>` tabular section
+   - `owl:AllDisjointClasses` -> `!` section
 3. Remaining triples -> subject blocks
 4. All information preserved
 
@@ -534,7 +534,7 @@ disjoint (Person Organization),(Person Place),(Occurrent Person),(Occurrent Orga
 
 1. Expand `class` section: each entry -> `a owl:Class`, `rdfs:label`, `rdfs:subClassOf` triples
 2. Expand tabular rows: each row -> property declaration triples
-3. Expand `disjoint` section: each group -> `owl:AllDisjointClasses` triples
+3. Expand `!` section: each group -> `owl:AllDisjointClasses` triples
 4. Emit subject block triples directly
 5. Produce valid Turtle with prefix declarations
 
