@@ -1,4 +1,4 @@
-# HOOT Specification v2.0
+# HOOT Specification
 
 **HOOT** (Hierarchical Ontology-Optimized Tokens) is a compact RDF serialization format optimized for OWL ontology data. It can represent any RDF graph and round-trips losslessly with Turtle.
 
