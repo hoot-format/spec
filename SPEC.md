@@ -1,6 +1,6 @@
-# HOOT Specification v1.0
+# HOOT Specification v2.0
 
-**HOOT** (Hierarchical Ontology-Optimized Tokens) is a compact, human-readable serialization format for OWL ontology data, designed for reduced token usage when passing structured ontology information to Large Language Models.
+**HOOT** (Hierarchical Ontology-Optimized Tokens) is a compact RDF serialization format optimized for OWL ontology data. It can represent any RDF graph and round-trips losslessly with Turtle.
 
 Inspired by [TOON](https://github.com/toon-format/toon) (Token-Oriented Object Notation).
 
@@ -8,138 +8,399 @@ Inspired by [TOON](https://github.com/toon-format/toon) (Token-Oriented Object N
 
 1. **Tabular arrays** -- Field names declared once; values listed per row
 2. **Minimal quoting** -- Strings unquoted unless ambiguous
-3. **Indentation-based hierarchy** -- Whitespace replaces verbose markup
+3. **Indentation-based structure** -- Whitespace replaces delimiters
+4. **Pattern compression** -- Common OWL patterns get compact syntax
+5. **Full RDF coverage** -- Any RDF graph is representable
 
-## Document Structure
+## Encoding Modes
 
-A HOOT document consists of sections separated by blank lines, in this order:
+HOOT defines two encoding modes:
 
-1. **Prefix declarations** (optional)
-2. **Class hierarchy** (indentation tree)
-3. **Tabular sections** (properties, etc.)
-4. **Inline sections** (disjoints, etc.)
+| Mode | Purpose | Guarantee |
+|------|---------|-----------|
+| **Lossless** | Round-trip with Turtle | All triples preserved exactly |
+| **Compact** | LLM prompt optimization | Derivable information omitted for minimum tokens |
 
-## 1. Prefix Declaration
+### Compact Mode Omissions
+
+The compact encoder MAY omit:
+
+| Information | Condition for omission |
+|-------------|----------------------|
+| `rdfs:label` | Label equals the IRI local name (e.g., `ex:Person` -> `"Person"`) |
+| Prefix on names | A declared prefix matches (e.g., `ex:Person` -> `Person`) |
+| `a owl:Class` | Class appears in a `class` section |
+| `a owl:ObjectProperty` | Property appears in an `ObjectProperty` tabular section |
+| `a owl:DatatypeProperty` | Property appears in a `DataProperty` tabular section |
+| Standard prefix declarations | `owl:`, `rdfs:`, `rdf:`, `xsd:` are implicitly available |
+| `rdfs:domain owl:Thing` | Domain is the universal class |
+
+The compact encoder MUST NOT omit:
+
+- Class hierarchy structure (rdfs:subClassOf)
+- Property inverse / characteristics / domain / range (except owl:Thing domain)
+- Disjoint, EquivalentClass, Restriction axioms
+- Labels that differ from the IRI local name
+- All ABox assertions (individuals)
+
+---
+
+## 1. Primitives
+
+### 1.1 IRIs
+
+Prefixed form or full IRI in angle brackets.
 
 ```
-@prefix <short>: <full-iri>
+ex:Person
+<http://example.org/Person>
 ```
 
-Declares a namespace prefix. After declaration, IRIs using that prefix may omit it in class and property names.
+In compact mode, the prefix may be omitted when unambiguous:
+
+```
+Person
+```
+
+### 1.2 Literals
+
+```
+"plain string"
+"typed"^^xsd:integer
+"tagged"@en
+42
+3.14
+true
+false
+```
+
+- Unquoted integers and decimals are numeric literals
+- `true` / `false` are boolean literals
+- All other values must be quoted strings
+
+### 1.3 Blank Nodes
+
+Named blank node with document-scoped identity:
+
+```
+_:label
+```
+
+Inline anonymous blank node:
+
+```
+[
+ rdf:type owl:Restriction
+ owl:onProperty ex:hasChild
+ owl:someValuesFrom owl:Thing
+]
+```
+
+Properties of the blank node are indented inside the brackets.
+
+### 1.4 Collections
+
+RDF lists use parentheses:
+
+```
+(ex:Person ex:Organization ex:Place)
+```
+
+Expands to `rdf:first` / `rdf:rest` / `rdf:nil` chain.
+
+---
+
+## 2. Document Structure
+
+A HOOT document consists of:
+
+1. **Prefix declarations**
+2. **Sections** (in any order, separated by blank lines):
+   - `class` -- Class hierarchy (compact OWL pattern)
+   - Tabular sections -- `ObjectProperty`, `DataProperty`, etc.
+   - `disjoint` -- Disjoint class sets (compact OWL pattern)
+   - Subject blocks -- General-purpose triples
+
+---
+
+## 3. Prefix Declaration
+
+```
+prefix <name>: <full-iri>
+```
+
+- Keyword `prefix` (lowercase, no `@`, no trailing `.`)
+- Standard prefixes (`owl:`, `rdfs:`, `rdf:`, `xsd:`) are implicitly available
+- In lossless mode, all prefixes used in the source Turtle are declared
+- In compact mode, standard prefixes MAY be omitted
 
 **Example:**
 ```
-@prefix ex: <http://example.org/>
+prefix ex: <http://example.org/>
 ```
 
-After this declaration, `Person` is equivalent to `ex:Person`.
+---
 
-**Rules:**
-- Zero or more `@prefix` lines at the start of the document
-- Each line declares exactly one prefix
-- Prefix names follow the pattern `[a-zA-Z][a-zA-Z0-9]*`
-- Full IRIs are enclosed in angle brackets
+## 4. Class Hierarchy
 
-## 2. Class Hierarchy
-
+Compact syntax for the triple pattern:
 ```
-<root-class>
- <child-class>
-  <grandchild-class>
- <another-child>
+?c a owl:Class ; rdfs:label ?label ; rdfs:subClassOf ?parent .
 ```
 
-Represents `rdfs:subClassOf` relationships via indentation.
+### Syntax
 
-**Rules:**
-- One space per hierarchy level (depth 0 = root, depth 1 = 1 space, depth 2 = 2 spaces, ...)
-- Root class is typically `owl:Thing`
-- Class names use the short form (prefix omitted) when a matching `@prefix` is declared
-- Each line contains exactly one class name
-- A class at depth N is a subclass of the nearest preceding class at depth N-1
-
-**Example:**
 ```
-owl:Thing
+class <root>
+ <iri>
+ <iri> <label>
+  <iri>
+```
+
+### Rules
+
+- Keyword `class` followed by root class IRI
+- One space per hierarchy level (depth 1 = 1 space, depth 2 = 2 spaces)
+- Each line: class IRI, optionally followed by a quoted label
+- A class at depth N is `rdfs:subClassOf` the nearest preceding class at depth N-1
+
+### Label derivation
+
+- **Lossless mode**: Always include the label (e.g., `ex:Person "Person"`)
+- **Compact mode**: Omit label when it equals the IRI local name (e.g., `ex:Person`)
+
+### Example (Lossless)
+
+```
+class owl:Thing
+ ex:Person "Person"
+  ex:Politician "Politician"
+  ex:Ruler "Ruler"
+ ex:Organization "Organization"
+  ex:GovernmentAgency "Government Agency"
+   ex:Municipality "Municipality"
+```
+
+### Example (Compact)
+
+```
+class owl:Thing
  Person
   Politician
   Ruler
-  Scientist
  Organization
-  Company
-  GovernmentAgency
+  GovernmentAgency "Government Agency"
    Municipality
- Place
-  Country
-  City
 ```
 
-This encodes:
-- `Person rdfs:subClassOf owl:Thing`
-- `Politician rdfs:subClassOf Person`
-- `Municipality rdfs:subClassOf GovernmentAgency`
-- etc.
+Note: `GovernmentAgency` retains its label because `"Government Agency"` differs from the local name `"GovernmentAgency"`.
 
-## 3. Tabular Section
+### Equivalent Turtle (per class)
+
+```turtle
+ex:Person a owl:Class ; rdfs:label "Person" ; rdfs:subClassOf owl:Thing .
+ex:GovernmentAgency a owl:Class ; rdfs:label "Government Agency" ; rdfs:subClassOf ex:Organization .
+```
+
+---
+
+## 5. Tabular Section
+
+Compact syntax for uniform property declarations.
+
+### Syntax
 
 ```
-<SectionName>{<field1>,<field2>,...}:
+<SectionType>{<field1>,<field2>,...}:
  <value1>,<value2>,...
- <value3>,<value4>,...
 ```
 
-Declares a table of uniform records. The header specifies the section name and field names; each subsequent indented line is a data row.
+### Rules
 
-**Rules:**
-- Header format: `Name{field1,field2,...}:` (no spaces around commas in header)
-- Data rows: 1-space indent, values separated by commas
-- Empty field: omitted between commas (e.g., `a,,c` means field2 is empty)
-- Trailing empty fields may be omitted (e.g., `a,b` is valid when 3 fields are declared -- field3 is empty)
-- Field count per row must not exceed the declared field count
+- Header: `SectionType{field1,field2,...}:`
+- Data rows: 1-space indent, comma-separated values
+- First field is always the subject IRI
+- Empty field: omitted between commas (`a,,c`)
+- Trailing empty fields may be omitted
 
-**Example:**
+### 5.1 ObjectProperty
+
+Fields and their predicate mapping:
+
+| Field | Predicate |
+|-------|-----------|
+| `iri` | Subject IRI (gets `a owl:ObjectProperty`) |
+| `label` | `rdfs:label` |
+| `inverse` | `owl:inverseOf` |
+| `characteristics` | Additional type assertion (see table below) |
+| `domain` | `rdfs:domain` |
+| `range` | `rdfs:range` |
+
+Characteristic values:
+
+| Value | Expands to |
+|-------|-----------|
+| `transitive` | `a owl:TransitiveProperty` |
+| `symmetric` | `a owl:SymmetricProperty` |
+| `asymmetric` | `a owl:AsymmetricProperty` |
+| `reflexive` | `a owl:ReflexiveProperty` |
+| `irreflexive` | `a owl:IrreflexiveProperty` |
+| `functional` | `a owl:FunctionalProperty` |
+| `inverseFunctional` | `a owl:InverseFunctionalProperty` |
+
+**Example (Lossless):**
 ```
-ObjectProperty{iri,inverse,characteristics}:
+ObjectProperty{iri,label,inverse,characteristics,domain,range}:
+ ex:partOf,part of,ex:hasPart,transitive,,
+ ex:locatedIn,located in,,,ex:Place
+ ex:hasFounder,has founder,ex:founderOf
+ ex:hasParticipant,has participant,ex:participatesIn,,ex:Event,
+ ex:causes,causes,ex:causedBy,,ex:Event,ex:Event
+```
+
+**Example (Compact):**
+```
+ObjectProperty{iri,inverse,characteristics,domain,range}:
  partOf,hasPart,transitive
- locatedIn,,transitive
+ locatedIn,,,Place
  hasFounder,founderOf
- memberOf,hasMember
- produces,producedBy
+ hasParticipant,participatesIn,,Event
+ causes,causedBy,,Event,Event
 ```
 
-This encodes 5 object properties. `locatedIn` has no inverse (empty field). `hasFounder` and below have no characteristics (trailing field omitted).
+In compact mode, the `label` field is omitted entirely from the header since all labels are derivable.
 
-## 4. Inline Section
+### 5.2 DataProperty
+
+| Field | Predicate |
+|-------|-----------|
+| `iri` | Subject IRI (gets `a owl:DatatypeProperty`) |
+| `label` | `rdfs:label` |
+| `domain` | `rdfs:domain` |
+| `range` | `rdfs:range` |
+
+**Example (Lossless):**
+```
+DataProperty{iri,label,domain,range}:
+ ex:occurredOnDate,occurred on date,ex:Occurrent,xsd:date
+ ex:wikipediaURL,Wikipedia URL,,xsd:anyURI
+```
+
+### 5.3 AnnotationProperty
+
+| Field | Predicate |
+|-------|-----------|
+| `iri` | Subject IRI (gets `a owl:AnnotationProperty`) |
+| `label` | `rdfs:label` |
+
+---
+
+## 6. Disjoint Section
+
+Compact syntax for `owl:AllDisjointClasses`.
+
+### Syntax
 
 ```
-<SectionName>: <value>
+disjoint (<class> <class> ...),(<class> <class> ...)
 ```
 
-A single-line section for compact data.
+### Rules
 
-**Set notation:**
+- Keyword `disjoint` (lowercase)
+- Each `(...)` group is a set of mutually disjoint classes
+- Groups separated by commas
+
+### Example
+
 ```
-Disjoint: {A,B},{C,D},{E,F}
+disjoint (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Event ex:Era)
 ```
 
-Each `{...}` group represents a set of mutually exclusive classes.
+### Equivalent Turtle (per group)
 
-**Rules:**
-- Section name followed by colon and space
-- Set groups use `{member1,member2,...}` notation
-- Groups separated by commas (no spaces)
-- Member names use short form (prefix omitted)
+```turtle
+[] a owl:AllDisjointClasses ; owl:members ( ex:Person ex:Organization ) .
+```
 
-## 5. Quoting Rules
+---
 
-Values are **unquoted by default**. A value MUST be quoted with double quotes (`"..."`) when it:
+## 7. Subject Block
 
-- Is an empty string
-- Contains: comma (`,`), colon (`:`), double quote (`"`), backslash (`\`), braces (`{`, `}`), brackets (`[`, `]`)
+General-purpose triple representation for anything not covered by compact patterns.
+
+### Syntax
+
+```
+<subject>:
+ <predicate> <object>
+ <predicate> <object>,<object>
+```
+
+### Rules
+
+- Subject IRI (or blank node label) followed by colon
+- Each predicate-object pair on an indented line (1 space)
+- Multiple objects for the same predicate: comma-separated
+- `a` is shorthand for `rdf:type`
+
+### Inline Blank Nodes
+
+```
+ex:Parent:
+ owl:equivalentClass [
+  a owl:Restriction
+  owl:onProperty ex:hasChild
+  owl:someValuesFrom owl:Thing
+ ]
+```
+
+- Opening `[` on the same line as the predicate
+- Properties indented inside
+- Closing `]` at the same indent level as opening
+
+### Nested Blank Nodes
+
+```
+ex:WorkingParent:
+ owl:equivalentClass [
+  owl:intersectionOf (
+   ex:Parent
+   [
+    a owl:Restriction
+    owl:onProperty ex:worksAt
+    owl:someValuesFrom ex:Organization
+   ]
+  )
+ ]
+```
+
+### Collections in Subject Blocks
+
+```
+_:disj1:
+ a owl:AllDisjointClasses
+ owl:members (ex:Person ex:Organization)
+```
+
+---
+
+## 8. Quoting Rules
+
+### In Tabular Rows
+
+Values are unquoted by default. Quote with `"..."` when the value:
+
+- Contains: `,` `"` `\` `(` `)` `[` `]` `{` `}`
 - Has leading or trailing whitespace
-- Looks like a reserved token: `true`, `false`, `null`
+- Is an empty string that must be preserved (distinct from omitted field)
+- Matches a keyword: `true` `false` `null` `a` `class` `prefix` `disjoint`
 
-**Escape sequences** (inside quoted strings):
+### In Subject Blocks
+
+Predicate and object values follow IRI / literal / blank node syntax (no additional quoting needed).
+
+### Escape Sequences
 
 | Sequence | Character |
 |----------|-----------|
@@ -148,53 +409,90 @@ Values are **unquoted by default**. A value MUST be quoted with double quotes (`
 | `\n` | Newline |
 | `\t` | Tab |
 
-## 6. Comments
+---
 
-Lines starting with `#` (after optional leading whitespace) are comments and are ignored by parsers.
+## 9. Comments
 
-```
-# This is a comment
-owl:Thing
- # Person hierarchy
- Person
-  Politician
-```
-
-## Complete Example
+Lines starting with `#` (after optional whitespace) are comments.
 
 ```
-@prefix ex: <http://example.org/>
+# Ontology definition
+class owl:Thing
+ # Person subtree
+ ex:Person "Person"
+```
 
-owl:Thing
+---
+
+## 10. Complete Example (Lossless)
+
+```
+prefix ex: <http://example.org/>
+
+class owl:Thing
+ ex:Person "Person"
+  ex:Politician "Politician"
+  ex:Ruler "Ruler"
+  ex:Scientist "Scientist"
+ ex:Organization "Organization"
+  ex:Company "Company"
+  ex:GovernmentAgency "Government Agency"
+   ex:Municipality "Municipality"
+ ex:Place "Place"
+  ex:Country "Country"
+  ex:City "City"
+ ex:Occurrent "Occurrent"
+  ex:Event "Event"
+  ex:Era "Era"
+
+ObjectProperty{iri,label,inverse,characteristics,domain,range}:
+ ex:partOf,part of,ex:hasPart,transitive,,
+ ex:locatedIn,located in,,transitive,,ex:Place
+ ex:hasFounder,has founder,ex:founderOf
+ ex:memberOf,member of,ex:hasMember
+ ex:produces,produces,ex:producedBy
+ ex:hasParticipant,has participant,ex:participatesIn,,ex:Event,
+ ex:causes,causes,ex:causedBy,,ex:Event,ex:Event
+
+DataProperty{iri,label,domain,range}:
+ ex:occurredOnDate,occurred on date,ex:Occurrent,xsd:date
+ ex:startDate,start date,ex:Occurrent,xsd:date
+ ex:endDate,end date,ex:Occurrent,xsd:date
+ ex:wikipediaURL,Wikipedia URL,,xsd:anyURI
+ ex:officialURL,official URL,,xsd:anyURI
+
+disjoint (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Occurrent ex:Person),(ex:Occurrent ex:Organization),(ex:Occurrent ex:Place),(ex:Product ex:Service),(ex:Event ex:Era)
+```
+
+## 11. Complete Example (Compact)
+
+```
+prefix ex: <http://example.org/>
+
+class owl:Thing
  Person
   Politician
   Ruler
-  MilitaryLeader
-  Executive
   Scientist
-  Artist
-  Athlete
-  ReligiousLeader
  Organization
   Company
-  GovernmentAgency
+  GovernmentAgency "Government Agency"
    Municipality
-  AcademicInstitution
-   University
-   ResearchInstitute
  Place
   Country
-  Region
   City
+ Occurrent
+  Event
+  Era
 
-ObjectProperty{iri,inverse,characteristics}:
+ObjectProperty{iri,inverse,characteristics,domain,range}:
  partOf,hasPart,transitive
- locatedIn,,transitive
+ locatedIn,,transitive,,Place
  hasFounder,founderOf
  memberOf,hasMember
  produces,producedBy
- hasParticipant,participatesIn
- causes,causedBy
+ hasParticipant,participatesIn,,Event
+ causes,causedBy,,Event,Event
 
 DataProperty{iri,domain,range}:
  occurredOnDate,Occurrent,xsd:date
@@ -203,21 +501,39 @@ DataProperty{iri,domain,range}:
  wikipediaURL,,xsd:anyURI
  officialURL,,xsd:anyURI
 
-Disjoint: {Person,Organization},{Person,Place},{Occurrent,Person},{Occurrent,Organization},{Occurrent,Place},{Product,Service}
+disjoint (Person Organization),(Person Place),(Occurrent Person),(Occurrent Organization),(Occurrent Place),(Product Service),(Event Era)
 ```
 
-## Token Efficiency
+---
 
-Compared to equivalent OWL Turtle serialization:
+## Round-trip Guarantee
 
-| Format | Approx. tokens (200 classes + 15 properties) |
-|--------|----------------------------------------------|
-| Turtle | ~700+ lines |
-| HOOT | ~230 lines |
-| **Reduction** | **~60-70%** |
+### Turtle -> HOOT (Lossless)
 
-The savings come from:
-- No repeated `a owl:Class ; rdfs:label "..." ;` per class
-- No prefix declarations repeated per triple
-- No ` .` statement terminators
-- Tabular properties vs. multi-line property blocks
+1. Parse Turtle into RDF triples
+2. Identify compressible patterns:
+   - Classes with `a owl:Class` + `rdfs:label` + `rdfs:subClassOf` -> `class` section
+   - Properties with uniform predicates -> tabular section
+   - `owl:AllDisjointClasses` -> `disjoint` section
+3. Remaining triples -> subject blocks
+4. All information preserved
+
+### HOOT (Lossless) -> Turtle
+
+1. Expand `class` section: each entry -> `a owl:Class`, `rdfs:label`, `rdfs:subClassOf` triples
+2. Expand tabular rows: each row -> property declaration triples
+3. Expand `disjoint` section: each group -> `owl:AllDisjointClasses` triples
+4. Emit subject block triples directly
+5. Produce valid Turtle with prefix declarations
+
+**Guarantee**: The RDF graphs are identical (same set of triples, modulo blank node renaming and triple ordering).
+
+### Turtle -> HOOT (Compact) -> Turtle
+
+Not guaranteed to produce identical Turtle. The compact encoder omits derivable information. However, a compact-mode decoder reconstructs the omitted triples using derivation rules:
+
+- Missing label -> derive from IRI local name
+- Missing prefix -> resolve using declared prefixes
+- Missing `a owl:Class` -> infer from `class` section membership
+
+The reconstructed RDF graph is semantically equivalent to the original.
