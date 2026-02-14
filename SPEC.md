@@ -126,18 +126,30 @@ A HOOT document consists of:
 ## 3. Prefix Declaration
 
 ```
-prefix <name>: <full-iri>
+@<name> //<authority-and-path>
 ```
 
-- Keyword `prefix` (lowercase, no `@`, no trailing `.`)
+- `@` sigil followed by prefix name, then a space, then the shortened IRI
+- `//` expands to `http://` on decode
+- Trailing separator (`/` or `#`) is omitted; on decode it is auto-appended:
+  - Known namespaces (`owl`, `rdfs`, `rdf`, `xsd`) → `#`
+  - All others → `/`
 - Standard prefixes (`owl:`, `rdfs:`, `rdf:`, `xsd:`) are implicitly available
 - In lossless mode, all prefixes used in the source Turtle are declared
 - In compact mode, standard prefixes MAY be omitted
 
 **Example:**
 ```
-prefix ex: <http://example.org/>
+@ex //example.org
 ```
+
+Expands to `http://example.org/` (non-standard prefix, so `/` is appended).
+
+```
+@owl //www.w3.org/2002/07/owl
+```
+
+Expands to `http://www.w3.org/2002/07/owl#` (known `#` namespace).
 
 ---
 
@@ -394,7 +406,7 @@ Values are unquoted by default. Quote with `"..."` when the value:
 - Contains: `,` `"` `\` `(` `)` `[` `]` `{` `}`
 - Has leading or trailing whitespace
 - Is an empty string that must be preserved (distinct from omitted field)
-- Matches a keyword: `true` `false` `null` `a` `class` `prefix` `disjoint`
+- Matches a keyword: `true` `false` `null` `a` `class` `disjoint`
 
 ### In Subject Blocks
 
@@ -427,7 +439,7 @@ class owl:Thing
 ## 10. Complete Example (Lossless)
 
 ```
-prefix ex: <http://example.org/>
+@ex //example.org
 
 class owl:Thing
  ex:Person "Person"
@@ -467,7 +479,7 @@ disjoint (ex:Person ex:Organization),(ex:Person ex:Place),(ex:Occurrent ex:Perso
 ## 11. Complete Example (Compact)
 
 ```
-prefix ex: <http://example.org/>
+@ex //example.org
 
 class owl:Thing
  Person

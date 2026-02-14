@@ -1,4 +1,4 @@
-prefix ex: <http://example.org/>
+@ex //example.org
 
 class owl:Thing
  ex:Person "Person"
